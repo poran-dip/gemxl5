@@ -1,0 +1,16 @@
+{
+  "name": "tiered-memory",
+  "private": "true",
+  "type": "module",
+  "version": "0.1.0",
+  "packageManager": "pnpm@12.5.1",
+  "scripts": {
+    "format:biome": "biome check . --write",
+    "format:prettier": "prettier **/*.md --write",
+    "format": "pnpm format:biome && pnpm format:prettier"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "prettier": "^3.9.8"
+  }
+}
