@@ -47,7 +47,7 @@ Here are all the reviewed papers.
 | Name      | Link                                          |
 | --------- | --------------------------------------------- |
 | INF^2     | https://arxiv.org/abs/2502.09921v1            |
-| NITRO     | https://arxiv.org/abs/2412.11053              |
+| NITRO     | https://ieeexplore.ieee.org/document/11539264 |
 | E-Flash   | https://ieeexplore.ieee.org/document/11380195 |
 | HillInfer | https://arxiv.org/abs/2602.18750              |
 | InstInfer | https://arxiv.org/abs/2409.04992              |
@@ -61,6 +61,7 @@ Here are all the reviewed papers.
 
 ## Production Deployments at Scale
 
-| Name    | Link                                          |
-| ------- | --------------------------------------------- |
-| Vistara | https://ieeexplore.ieee.org/document/11617773 |
+| Name       | Link                                           |
+| ---------- | ---------------------------------------------- |
+| Vistara    | https://ieeexplore.ieee.org/document/11617773  |
+| Cost Model | https://dl.acm.org/doi/10.1145/3627703.3650061 |
