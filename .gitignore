@@ -1,1 +1,5 @@
 node_modules/
+build/
+m5out/
+__pycache__/
+*.pyc

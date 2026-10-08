@@ -1,0 +1,21 @@
+# make native                       -> build/native/*  (optional real-machine calibration)
+# make m5                           -> build/m5/*      (static + ROI markers, for gem5 SE mode)
+# one-time:  cd ../third_party/gem5/util/m5 && scons build/x86/out/m5
+GEM5 ?= $(abspath ../third_party/gem5)
+CXX ?= g++
+CXXFLAGS = -O2 -std=c++17 -static
+WL = stream sort gemm chase kvdecode
+
+native: $(addprefix build/native/,$(WL))
+build/native/%: %.cpp common.h
+	@mkdir -p build/native
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+m5: $(addprefix build/m5/,$(WL))
+build/m5/%: %.cpp common.h
+	@mkdir -p build/m5
+	$(CXX) $(CXXFLAGS) -DUSE_M5 -I$(GEM5)/include $< -o $@ -L$(GEM5)/util/m5/build/x86/out -lm5
+
+clean:
+	rm -rf build
+.PHONY: native m5 clean
