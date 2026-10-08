@@ -3,7 +3,7 @@ numbers are chosen so the expected answers are easy to check by hand."""
 
 import pytest
 
-from gemxl.gem5stats import memory_controllers, roi_block, summarize
+from tiered_memory.gem5stats import memory_controllers, roi_block, summarize
 
 HEADER = "---------- Begin Simulation Statistics ----------\n"
 FOOTER = "---------- End Simulation Statistics   ----------\n"

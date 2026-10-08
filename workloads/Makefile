@@ -1,6 +1,6 @@
 # make native                       -> build/native/*  (optional real-machine calibration)
 # make m5                           -> build/m5/*      (static + ROI markers, for gem5 SE mode)
-# one-time:  cd ../third_party/gem5/util/m5 && scons build/x86/out/m5
+# gem5 + m5 library first: ../scripts/setup.sh fetch m5  (or the full scripts/setup.sh)
 GEM5 ?= $(abspath ../third_party/gem5)
 CXX ?= g++
 CXXFLAGS = -O2 -std=c++17 -static

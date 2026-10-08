@@ -1,4 +1,4 @@
-from gemxl.descend import Knee, bottleneck, limits_mb, run_timeout, slowdown
+from tiered_memory.descend import Knee, bottleneck, limits_mb, run_timeout, slowdown
 
 
 def test_limits_descend_and_dedupe():

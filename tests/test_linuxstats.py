@@ -1,7 +1,13 @@
 from types import SimpleNamespace
 
-from gemxl.linuxstats import cpu_columns, delta_columns, read_numastat, read_vmstat, snapshot
-from gemxl.result import parse_result, throughput_cols
+from tiered_memory.linuxstats import (
+    cpu_columns,
+    delta_columns,
+    read_numastat,
+    read_vmstat,
+    snapshot,
+)
+from tiered_memory.result import parse_result, throughput_cols
 
 
 def write_vmstat(path, **kv):
