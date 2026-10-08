@@ -53,6 +53,8 @@ tiered_memory/      measurement code shared by both sweeps
 tests/              pytest suite for tiered_memory/ and the sweeps
 scripts/setup.sh    fetches gem5 at a pinned commit and builds everything
 docs/               measurements.md, literature-review.md
+results/            committed result CSVs (native_sweep.csv, gem5_sweep.csv, ...)
+findings/           what the results show, one numbered file per finding
 third_party/gem5    gem5 checkout (not committed, see Setup)
 ```
 
