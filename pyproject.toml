@@ -1,0 +1,38 @@
+# Tool config only; this repo is not a Python package.
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+extend-exclude = '''
+/(
+    third_party
+  | build
+  | m5out
+  | node_modules
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["third_party", "build", "m5out", "node_modules"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "C4",  # comprehensions
+    "SIM", # simplify
+]
+ignore = [
+    "E501", # line length is black's job
+    "E741",
+]
+
+[tool.ruff.lint.isort]
+# gem5 is provided by the simulator at runtime, not installed from PyPI
+known-third-party = ["gem5", "m5"]
