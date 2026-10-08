@@ -4,63 +4,29 @@
 Status 'OOM' = working set no longer fits in simulated DRAM (the 'limit').
 Metrics come from the FIRST stats block in stats.txt = the ROI (reset at ROI begin,
 dumped at ROI end by common.h); the trailing block is post-ROI teardown, ignored.
+Columns are documented in docs/measurements.md. The full ROI stats of every run are also saved
+as roi_stats.json next to stats.txt, so new metrics can be derived later without re-simulating.
 """
 
 import argparse
 import csv
+import json
 import os
 import re
 import subprocess
 import sys
-from contextlib import suppress
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
+sys.path.insert(0, str(REPO))
+
+from gemxl.gem5stats import roi_block, summarize  # noqa: E402
+from gemxl.result import parse_result, throughput_cols  # noqa: E402
+from gemxl.schema import SLOW_TIER_PATTERN  # noqa: E402
 
 # workload -> (ws_mb, iters); sized for gem5 speed, keep ws >> L2 so DRAM is exercised
 DEFAULTS = {"stream": (8, 2), "sort": (4, 1), "gemm": (2, 1), "chase": (8, 1), "kvdecode": (8, 2)}
-
-
-def first_block(path):
-    st, started = {}, False
-    with open(path) as f:
-        for line in f:
-            if line.startswith("---------- Begin"):
-                if started:
-                    break
-                started = True
-                continue
-            if line.startswith("---------- End"):
-                break
-            f = line.split()
-            if started and len(f) >= 2 and not line.startswith("#"):
-                with suppress(ValueError):
-                    st[f[0]] = float(f[1])
-    return st
-
-
-def summarize(st):
-    def tot(suf):
-        return sum(v for k, v in st.items() if k.endswith(suf))
-
-    def mx(suf):
-        return max([v for k, v in st.items() if k.endswith(suf)] or [""])
-
-    insts = st.get("simInsts") or tot(".committedInsts") or tot(".numInsts")
-    cyc = tot(".numCycles")
-    lat = [v for k, v in st.items() if k.endswith("avgMemAccLat")]
-    l2m = [v for k, v in st.items() if "l2" in k and k.endswith("overallMisses::total")]
-    return {
-        "sim_sec": st.get("simSeconds", ""),
-        "insts": insts,
-        "cycles": cyc,
-        "ipc": round(insts / cyc, 4) if cyc else "",
-        "dram_rd_bursts": mx(".readBursts"),
-        "dram_wr_bursts": mx(".writeBursts"),
-        "avg_mem_lat_ns": round(lat[0] / 1000, 2) if lat else "",  # ticks=ps
-        "l2_misses": sum(l2m) if l2m else "",
-    }
 
 
 def pow2_mib(x):
@@ -68,6 +34,23 @@ def pow2_mib(x):
     while m < x:
         m *= 2
     return m
+
+
+def collect(row, od, log, slow_pattern):
+    """Fill row with everything measurable from one finished run's output directory."""
+    res = parse_result(log)
+    if res.get("checksum"):
+        row["checksum"] = res["checksum"]
+    sp = os.path.join(od, "stats.txt")
+    if not os.path.exists(sp):
+        return
+    st = roi_block(sp)
+    row.update(summarize(st, slow_pattern))
+    Path(od, "roi_stats.json").write_text(json.dumps(st, indent=1, sort_keys=True))
+    # Time and work for throughput come from the simulator, not the guest's emulated clock.
+    if res and row.get("sim_sec"):
+        row.update(throughput_cols(row["workload"], res.get("work"), row["sim_sec"]))
+        row["roi_sec_guest"] = res.get("roi_sec", "")
 
 
 if __name__ == "__main__":
@@ -87,6 +70,11 @@ if __name__ == "__main__":
     p.add_argument("--timeout", type=int, default=3600)
     p.add_argument(
         "--reparse", action="store_true", help="re-parse existing m5out dirs, no simulation"
+    )
+    p.add_argument(
+        "--slow-pattern",
+        default=SLOW_TIER_PATTERN,
+        help="regex; memory controllers whose stat path matches count as the slow tier",
     )
     p.add_argument("--out", default=str(REPO / "results/gem5_sweep.csv"))
     p.add_argument("--outroot", default=str(REPO / "m5out"))
@@ -118,18 +106,19 @@ if __name__ == "__main__":
                 "workload": w,
                 "ws_mb": ws,
                 "dram_mib": m,
+                "slow_mib": 0,  # no second tier yet
                 "ratio": round(m / ws, 2),
                 "cpu": a.cpu,
             }
             if a.reparse:
                 sp, lg = os.path.join(od, "stats.txt"), os.path.join(od, "run.log")
-                if os.path.exists(lg) and "Out of memory" in Path(lg).read_text():
+                log = Path(lg).read_text() if os.path.exists(lg) else ""
+                if "Out of memory" in log:
                     row["status"] = "OOM"
                 elif os.path.exists(sp):
-                    row.update(summarize(first_block(sp)))
-                    row["status"] = (
-                        "ok" if row.get("insts") else "OOM"
-                    )  # OOM runs leave an all-zero stats.txt
+                    collect(row, od, log, a.slow_pattern)
+                    # OOM runs leave an all-zero stats.txt
+                    row["status"] = "ok" if row.get("insts") else "OOM"
                 else:
                     row["status"] = "not-run"
                 print(row, file=sys.stderr)
@@ -146,12 +135,12 @@ if __name__ == "__main__":
                     row["status"] = f"exit{r.returncode}"
                 else:
                     row["status"] = "ok"
-                sp = os.path.join(od, "stats.txt")
-                if row["status"] == "ok" and os.path.exists(sp):
-                    row.update(summarize(first_block(sp)))
-                m_ = re.search(r"checksum=(\d+)", log)
-                if m_:
-                    row["checksum"] = m_.group(1)
+                if row["status"] == "ok":
+                    collect(row, od, log, a.slow_pattern)
+                else:
+                    m_ = re.search(r"checksum=(\d+)", log)
+                    if m_:
+                        row["checksum"] = m_.group(1)
             except subprocess.TimeoutExpired:
                 row["status"] = "timeout"
             print(row, file=sys.stderr)
