@@ -6,11 +6,13 @@ clearly hurting, so the sweep never spends minutes inside a thrashing run.
 
 import math
 
+from .workloads import NATIVE_WS
+
 # memory limit as a multiple of the working set: from roomy down to heavily starved
 DEFAULT_FACTORS = (2.0, 1.5, 1.25, 1.0, 0.75, 0.5, 0.375, 0.25)
 
-# small working sets for quick native runs (MiB); gemm's work grows with the cube of its size
-DEFAULT_WS = {"stream": 64, "sort": 64, "gemm": 16, "chase": 64, "kvdecode": 64}
+# small working sets for quick native runs (MiB); see tiered_memory/workloads.py
+DEFAULT_WS = NATIVE_WS
 
 
 def limits_mb(ws_mb, factors=DEFAULT_FACTORS):

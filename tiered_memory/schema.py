@@ -11,11 +11,4 @@ TICKS_PER_SEC = 1e12
 # Name the second tier's controller accordingly when the two-tier config is built.
 SLOW_TIER_PATTERN = r"slow|cxl|pcie"
 
-# What one unit of each workload's "work" means (see the comment at the top of each workload).
-WORK_UNIT = {
-    "stream": "bytes",
-    "chase": "hops",
-    "gemm": "flops",
-    "sort": "compares",
-    "kvdecode": "bytes",
-}
+# What one unit of each workload's "work" means lives in workloads.py (WORK_UNIT).

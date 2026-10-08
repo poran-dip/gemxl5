@@ -6,7 +6,7 @@
   "packageManager": "pnpm@12.5.1",
   "scripts": {
     "format:biome": "biome check . --write",
-    "format:prettier": "prettier **/*.md --write",
+    "format:prettier": "prettier README.md **/*.md --write",
     "format": "pnpm format:biome && pnpm format:prettier"
   },
   "devDependencies": {

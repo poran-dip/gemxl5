@@ -1,6 +1,6 @@
 """Parsing of the RESULT line every workload prints, plus throughput derived from it."""
 
-from .schema import WORK_UNIT
+from .workloads import WORK_UNIT
 
 
 def parse_result(text):

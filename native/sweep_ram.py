@@ -8,7 +8,6 @@ the slowdown passes --stop-slowdown, then stops):
 """
 
 import argparse
-import csv
 import os
 import resource
 import subprocess
@@ -18,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from tiered_memory.csvout import RESULTS, ResultsFile  # noqa: E402
 from tiered_memory.descend import (  # noqa: E402
     DEFAULT_FACTORS,
     DEFAULT_WS,
@@ -29,8 +29,8 @@ from tiered_memory.descend import (  # noqa: E402
 )
 from tiered_memory.linuxstats import cpu_columns, delta_columns, snapshot  # noqa: E402
 from tiered_memory.result import parse_result, throughput_cols  # noqa: E402
-
-ITERS = {"stream": 3, "sort": 1, "gemm": 1, "chase": 2, "kvdecode": 8}
+from tiered_memory.workloads import NATIVE_ITERS as ITERS  # noqa: E402
+from tiered_memory.workloads import stale_binaries  # noqa: E402
 
 
 def run(binary, ws, iters, seed, limit_mb, timeout):
@@ -72,21 +72,12 @@ def run(binary, ws, iters, seed, limit_mb, timeout):
     return row
 
 
-def write_csv(path, rows):
-    keys = list(dict.fromkeys(k for r in rows for k in r))
-    with open(path, "w", newline="") as f:
-        wr = csv.DictWriter(f, fieldnames=keys, restval="")
-        wr.writeheader()
-        wr.writerows(rows)
-
-
-def descend(binary, ws, iters, a, rows):
+def descend(binary, ws, iters, a, results):
     """Unlimited baseline, then lower the limit until the workload is clearly bottlenecked."""
 
     def record(r):
         print(r, file=sys.stderr)
-        rows.append(r)
-        write_csv(a.out, rows)  # saved after every run, so Ctrl-C loses nothing
+        results.add(r)  # saved after every run, so Ctrl-C loses nothing
 
     base_runs = [run(binary, ws, iters, a.seed, None, a.timeout) for _ in range(a.baseline_reps)]
     good = [r for r in base_runs if r["status"] == "ok" and "roi_sec" in r]
@@ -121,7 +112,12 @@ if __name__ == "__main__":
     p.add_argument("--workloads", nargs="+", default=list(ITERS))
     p.add_argument("--timeout", type=int, default=900, help="hard cap per run, seconds")
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--out", default="ram_sweep.csv")
+    p.add_argument(
+        "--out",
+        default=str(RESULTS / "native_sweep.csv"),
+        help="results CSV; rows for the workloads (and ws) rerun here replace earlier ones",
+    )
+    p.add_argument("--fresh", action="store_true", help="overwrite --out instead of merging")
     d = p.add_argument_group("--descend: find the knee, then stop")
     d.add_argument("--descend", action="store_true", help="lower the limit until slowdown hits")
     d.add_argument(
@@ -144,14 +140,17 @@ if __name__ == "__main__":
     a = p.parse_args()
     if os.geteuid() != 0 and (a.descend or any(x != "none" for x in a.limits)):
         sys.exit("run with sudo (system-level cgroup needed)")
-    rows = []
+    stale = stale_binaries(a.bindir, a.workloads)
+    if stale:
+        sys.exit(f"missing or older than source: {' '.join(stale)}; run: make -C workloads native")
+    results = ResultsFile(a.out, key=("workload", "ws_mb"), fresh=a.fresh)
     for w in a.workloads:
         if a.descend:
-            descend(f"{a.bindir}/{w}", a.ws or DEFAULT_WS[w], ITERS[w], a, rows)
+            descend(f"{a.bindir}/{w}", a.ws or DEFAULT_WS[w], ITERS[w], a, results)
             continue
         for x in a.limits:
             lim = None if x == "none" else int(x)
             r = run(f"{a.bindir}/{w}", a.ws or 1024, ITERS[w], a.seed, lim, a.timeout)
             print(r, file=sys.stderr)
-            rows.append(r)
-            write_csv(a.out, rows)
+            results.add(r)
+    print(f"wrote {a.out}", file=sys.stderr)

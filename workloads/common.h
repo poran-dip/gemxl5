@@ -17,6 +17,7 @@ struct Args {
     size_t bytes() const { return (size_t)(ws_mb * 1024 * 1024); }
     int iters = 1;
     uint64_t seed = 42;
+    double skew = 0.99; // -z: Zipfian skew for workloads that draw keys (kvstore); 0 = uniform
 };
 
 inline Args parse_args(int argc, char** argv) {
@@ -28,6 +29,8 @@ inline Args parse_args(int argc, char** argv) {
             a.iters = static_cast<int>(strtol(argv[i + 1], nullptr, 10));
         else if (!strcmp(argv[i], "-r"))
             a.seed = strtoull(argv[i + 1], nullptr, 10);
+        else if (!strcmp(argv[i], "-z"))
+            a.skew = strtod(argv[i + 1], nullptr);
     }
     return a;
 }

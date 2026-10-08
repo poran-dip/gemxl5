@@ -4,6 +4,7 @@ import csv
 from types import SimpleNamespace
 
 from native import sweep_ram
+from tiered_memory.csvout import ResultsFile
 
 ARGS = {
     "seed": 1,
@@ -33,8 +34,9 @@ def test_descend_stops_one_run_after_the_knee(tmp_path, monkeypatch):
     roi = {None: 1.0, 128: 1.0, 64: 1.1, 32: 3.0, 16: 50.0}
     monkeypatch.setattr(sweep_ram, "run", fake_run(roi, calls))
     a = SimpleNamespace(out=str(tmp_path / "o.csv"), **ARGS)
-    rows = []
-    sweep_ram.descend("bin", 64, 1, a, rows)
+    results = ResultsFile(a.out, key=("workload", "ws_mb"))
+    sweep_ram.descend("bin", 64, 1, a, results)
+    rows = results.new
     limits = [c[0] for c in calls]
     assert limits == [None, None, 128, 64, 32, 16]  # 2 baselines, then down to one past the knee
     knee = [r for r in rows if r["bottleneck"]]
@@ -49,8 +51,9 @@ def test_descend_stops_on_failure_and_caps_timeout(tmp_path, monkeypatch):
     roi = {None: 1.0, 128: 1.0, 64: None}
     monkeypatch.setattr(sweep_ram, "run", fake_run(roi, calls))
     a = SimpleNamespace(out=str(tmp_path / "o.csv"), **ARGS)
-    rows = []
-    sweep_ram.descend("bin", 64, 1, a, rows)
+    results = ResultsFile(a.out, key=("workload", "ws_mb"))
+    sweep_ram.descend("bin", 64, 1, a, results)
+    rows = results.new
     assert [c[0] for c in calls] == [None, None, 128, 64]
     assert calls[-1][1] == 30  # 30 x 1.00 s baseline wall
     assert rows[-1]["bottleneck"] == "exit-9"
@@ -60,7 +63,8 @@ def test_descend_reports_failed_baseline(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(sweep_ram, "run", fake_run({None: None}, calls))
     a = SimpleNamespace(out=str(tmp_path / "o.csv"), **ARGS)
-    rows = []
-    sweep_ram.descend("bin", 64, 1, a, rows)
+    results = ResultsFile(a.out, key=("workload", "ws_mb"))
+    sweep_ram.descend("bin", 64, 1, a, results)
+    rows = results.new
     assert all(r["bottleneck"] == "baseline failed" for r in rows)
     assert len(calls) == 2  # never goes on to limited runs
