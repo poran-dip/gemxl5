@@ -6,7 +6,8 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignoreUnknown": false
+    "ignoreUnknown": true,
+    "includes": ["**", "!third_party"]
   },
   "formatter": {
     "enabled": true,

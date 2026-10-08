@@ -3,3 +3,7 @@ build/
 m5out/
 __pycache__/
 *.pyc
+third_party/
+.ruff_cache/
+.venv/
+.pytest_cache/

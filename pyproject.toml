@@ -36,3 +36,7 @@ ignore = [
 [tool.ruff.lint.isort]
 # gem5 is provided by the simulator at runtime, not installed from PyPI
 known-third-party = ["gem5", "m5"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
