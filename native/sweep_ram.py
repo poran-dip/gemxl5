@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from gemxl.descend import (  # noqa: E402
+from tiered_memory.descend import (  # noqa: E402
     DEFAULT_FACTORS,
     DEFAULT_WS,
     Knee,
@@ -27,8 +27,8 @@ from gemxl.descend import (  # noqa: E402
     run_timeout,
     slowdown,
 )
-from gemxl.linuxstats import cpu_columns, delta_columns, snapshot  # noqa: E402
-from gemxl.result import parse_result, throughput_cols  # noqa: E402
+from tiered_memory.linuxstats import cpu_columns, delta_columns, snapshot  # noqa: E402
+from tiered_memory.result import parse_result, throughput_cols  # noqa: E402
 
 ITERS = {"stream": 3, "sort": 1, "gemm": 1, "chase": 2, "kvdecode": 8}
 

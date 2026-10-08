@@ -21,9 +21,9 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(REPO))
 
-from gemxl.gem5stats import roi_block, summarize  # noqa: E402
-from gemxl.result import parse_result, throughput_cols  # noqa: E402
-from gemxl.schema import SLOW_TIER_PATTERN  # noqa: E402
+from tiered_memory.gem5stats import roi_block, summarize  # noqa: E402
+from tiered_memory.result import parse_result, throughput_cols  # noqa: E402
+from tiered_memory.schema import SLOW_TIER_PATTERN  # noqa: E402
 
 # workload -> (ws_mb, iters); sized for gem5 speed, keep ws >> L2 so DRAM is exercised
 DEFAULTS = {"stream": (8, 2), "sort": (4, 1), "gemm": (2, 1), "chase": (8, 1), "kvdecode": (8, 2)}

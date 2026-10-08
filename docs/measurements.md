@@ -1,7 +1,7 @@
 # Measurements
 
 Maps each measurement required by the project spec to the CSV columns that report it, where the
-number comes from, and what it does and does not mean. Code: `gemxl/`. Sweeps:
+number comes from, and what it does and does not mean. Code: `tiered_memory/`. Sweeps:
 `configs/sweep.py` (gem5, writes `results/gem5_sweep.csv`) and `native/sweep_ram.py` (real
 machine, writes `ram_sweep.csv`).
 
