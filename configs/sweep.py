@@ -9,7 +9,6 @@ as roi_stats.json next to stats.txt, so new metrics can be derived later without
 """
 
 import argparse
-import csv
 import json
 import os
 import re
@@ -21,12 +20,14 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(REPO))
 
+from tiered_memory.csvout import RESULTS, ResultsFile  # noqa: E402
 from tiered_memory.gem5stats import roi_block, summarize  # noqa: E402
 from tiered_memory.result import parse_result, throughput_cols  # noqa: E402
 from tiered_memory.schema import SLOW_TIER_PATTERN  # noqa: E402
+from tiered_memory.workloads import GEM5_DEFAULTS  # noqa: E402
 
 # workload -> (ws_mb, iters); sized for gem5 speed, keep ws >> L2 so DRAM is exercised
-DEFAULTS = {"stream": (8, 2), "sort": (4, 1), "gemm": (2, 1), "chase": (8, 1), "kvdecode": (8, 2)}
+DEFAULTS = GEM5_DEFAULTS
 
 
 def pow2_mib(x):
@@ -76,10 +77,11 @@ if __name__ == "__main__":
         default=SLOW_TIER_PATTERN,
         help="regex; memory controllers whose stat path matches count as the slow tier",
     )
-    p.add_argument("--out", default=str(REPO / "results/gem5_sweep.csv"))
+    p.add_argument("--out", default=str(RESULTS / "gem5_sweep.csv"))
+    p.add_argument("--fresh", action="store_true", help="overwrite --out instead of merging")
     p.add_argument("--outroot", default=str(REPO / "m5out"))
     a = p.parse_args()
-    rows = []
+    results = ResultsFile(a.out, key=("workload", "ws_mb", "dram_mib", "cpu"), fresh=a.fresh)
     for w in a.workloads:
         ws, it = DEFAULTS[w]
         mems = [int(m) for m in a.mem] if a.mem else [pow2_mib(ws * r) for r in a.ratios]
@@ -122,7 +124,7 @@ if __name__ == "__main__":
                 else:
                     row["status"] = "not-run"
                 print(row, file=sys.stderr)
-                rows.append(row)
+                results.add(row)
                 continue
             try:
                 r = subprocess.run(cmd, capture_output=True, text=True, timeout=a.timeout)
@@ -144,10 +146,5 @@ if __name__ == "__main__":
             except subprocess.TimeoutExpired:
                 row["status"] = "timeout"
             print(row, file=sys.stderr)
-            rows.append(row)
-    keys = list(dict.fromkeys(k for r in rows for k in r))
-    os.makedirs(os.path.dirname(a.out), exist_ok=True)
-    with open(a.out, "w", newline="") as f:
-        wr = csv.DictWriter(f, fieldnames=keys, restval="")
-        wr.writeheader()
-        wr.writerows(rows)
+            results.add(row)
+    print(f"wrote {a.out}", file=sys.stderr)

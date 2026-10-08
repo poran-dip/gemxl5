@@ -2,12 +2,15 @@
 """Run workloads at several working-set sizes, collect RESULT lines into a CSV."""
 
 import argparse
-import csv
 import subprocess
 import sys
 from pathlib import Path
 
-ITERS = {"stream": 3, "sort": 1, "gemm": 1, "chase": 2, "kvdecode": 8}
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tiered_memory.csvout import RESULTS, ResultsFile  # noqa: E402
+from tiered_memory.workloads import NATIVE_ITERS as ITERS  # noqa: E402
+from tiered_memory.workloads import stale_binaries  # noqa: E402
 
 
 def run(binary, ws_mb, iters, seed):
@@ -29,15 +32,16 @@ if __name__ == "__main__":
     p.add_argument("--sizes", type=int, nargs="+", default=[64, 256, 1024])
     p.add_argument("--workloads", nargs="+", default=list(ITERS))
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--out", default="results.csv")
+    p.add_argument("--out", default=str(RESULTS / "native_bench.csv"))
+    p.add_argument("--fresh", action="store_true", help="overwrite --out instead of merging")
     a = p.parse_args()
-    rows = []
+    stale = stale_binaries(a.bindir, a.workloads)
+    if stale:
+        sys.exit(f"missing or older than source: {' '.join(stale)}; run: make -C workloads native")
+    results = ResultsFile(a.out, key=("name", "ws_mb"), fresh=a.fresh)
     for w in a.workloads:
         for s in a.sizes:
             r = run(f"{a.bindir}/{w}", s, ITERS[w], a.seed)
             print(r, file=sys.stderr)
-            rows.append(r)
-    with open(a.out, "w", newline="") as f:
-        wr = csv.DictWriter(f, fieldnames=rows[0].keys())
-        wr.writeheader()
-        wr.writerows(rows)
+            results.add(r)
+    print(f"wrote {a.out}", file=sys.stderr)

@@ -60,15 +60,20 @@ third_party/gem5    gem5 checkout (not committed, see Setup)
 
 Each workload takes `-s <MiB>` (working set), `-i <iters>` and `-r <seed>`, and prints one `RESULT` line ending in a checksum so any two runs can be confirmed to have done identical work.
 
-| Workload   | Access pattern                                        | `work` unit |
-| ---------- | ----------------------------------------------------- | ----------- |
-| `stream`   | Sequential bandwidth                                  | bytes       |
-| `sort`     | Sorting 16-byte records, mixed access                 | compares    |
-| `gemm`     | Blocked matrix multiply, cache-friendly               | flops       |
-| `chase`    | Dependent pointer chase, pure latency                 | hops        |
-| `kvdecode` | LLM-decode proxy: weight streaming plus KV-cache scan | bytes       |
+| Workload   | Brief class      | Access pattern                                                                        | `work` unit |
+| ---------- | ---------------- | ------------------------------------------------------------------------------------- | ----------- |
+| `stream`   | bandwidth        | Sequential bandwidth (STREAM triad)                                                   | bytes       |
+| `sort`     | random/irregular | Sorting 16-byte records, mixed access                                                 | compares    |
+| `gemm`     | compute/matrix   | Blocked matrix multiply, cache-resident (compute control)                             | flops       |
+| `chase`    | random/irregular | Dependent pointer chase, pure latency                                                 | hops        |
+| `kvdecode` | CPU AI/LLM       | LLM decode: per-layer weight streaming plus a growing KV cache with softmax attention | bytes       |
+| `graph`    | graph            | R-MAT power-law graph in CSR: BFS, then pull PageRank; hub vertices are hot           | edges       |
+| `kvstore`  | database (OLTP)  | YCSB-B-style hash-table point lookups/updates, scrambled Zipfian keys (`-z`)          | ops         |
+| `hashjoin` | database (OLAP)  | No-partition hash join: random build, sequential probe stream + random lookups        | tuples      |
 
-Graph, database and compilation workloads are still to be added.
+`kvstore` also takes `-z <theta>` (Zipfian skew, default 0.99; `0` = uniform). The list of workloads, their units and default sizes lives in [`tiered_memory/workloads.py`](tiered_memory/workloads.py); every script reads it.
+
+Still to add, both needing full-system Linux (Phase 1): compilation (e.g. `gcc -O2` on a large translation unit) and a real CPU LLM run (e.g. llama.cpp with a small model).
 
 ## Measurements
 
