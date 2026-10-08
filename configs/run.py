@@ -2,6 +2,7 @@
 Run:  gem5.opt -d <outdir> configs/run.py --binary build/m5/stream --mem-size 64MiB -- -s 8 -i 2
 Everything after '--' is passed to the workload.
 """
+
 import argparse
 
 from gem5.components.boards.simple_board import SimpleBoard
@@ -35,13 +36,9 @@ board = SimpleBoard(
     clk_freq=a.clk,
     processor=SimpleProcessor(cpu_type=cpu, isa=ISA.X86, num_cores=1),
     memory=SingleChannelDDR4_2400(size=a.mem_size),
-    cache_hierarchy=PrivateL1PrivateL2CacheHierarchy(
-        l1d_size=a.l1d, l1i_size=a.l1i, l2_size=a.l2
-    ),
+    cache_hierarchy=PrivateL1PrivateL2CacheHierarchy(l1d_size=a.l1d, l1i_size=a.l1i, l2_size=a.l2),
 )
-board.set_se_binary_workload(
-    binary=BinaryResource(local_path=a.binary), arguments=wl_args
-)
+board.set_se_binary_workload(binary=BinaryResource(local_path=a.binary), arguments=wl_args)
 
 sim = Simulator(board=board)
 sim.run()

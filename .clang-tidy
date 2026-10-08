@@ -1,0 +1,21 @@
+---
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  readability-container-size-empty,
+  readability-redundant-*,
+  readability-misleading-indentation,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-using,
+  modernize-loop-convert,
+  clang-analyzer-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -clang-analyzer-security.insecureAPI.*
+# Only report on this repo's own code, never system or gem5 headers.
+HeaderFilterRegex: '.*/workloads/.*'
+WarningsAsErrors: '*'
+FormatStyle: file
+...
