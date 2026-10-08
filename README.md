@@ -1,42 +1,130 @@
-# Tiered Memory Architecture
+# Software-Managed PCIe DRAM Memory Tier
 
-Evaluating CXL-style multi-tier memory systems — from local DRAM to CXL-attached memory and computational storage — using the gem5 architectural simulator, with a focus on AI inference/matrix workloads, evaluating latency, IPC, and cost-normalized performance.
+Can a commodity PC with no CXL support benefit from a large, slow DRAM tier attached over PCIe, managed by **unmodified Linux** memory management? This repo models that system in [gem5](https://www.gem5.org/) and measures whether it ever beats the same machine without the extra memory.
 
-## Motivation
+## The question
 
-DDR5 memory prices have spiked with AI datacenter demand, while older memory modules and alternative storage tiers remain comparatively cheap. Attaching lower-cost memory over a CXL/PCIe bus is one answer, but the tradeoffs — latency, bandwidth, and how workloads actually behave across a tiered hierarchy — aren't well characterized yet, especially for AI inference and matrix-heavy workloads at the gem5 microarchitecture level. This project uses gem5 to model that hierarchy directly and measure what it actually costs and gains.
+A typical commodity system has a fixed amount of fast DRAM (DDR4/DDR5). CXL lets servers add more memory on a separate device, but most consumer PCs don't support it. The simpler alternative studied here: put cheap, older DRAM (DDR3/DDR2 class) behind PCIe and let Linux use it as a second NUMA node.
 
-## Scope
+CXL is the inspiration, not the target. There is no custom page-placement algorithm at first; the point is to find out what the existing Linux NUMA and memory-tiering mechanisms do with the extra capacity.
 
-The project started from a 2-tier spec (fast local DRAM vs. high-latency PCIe memory) and has since grown into a 3–4 tier model, closer to a real datacenter stack:
-
-- **GPU-local memory** (HBM/GDDR) at the top
-- **Local DDR5**
-- **DDR4**, either as a second local tier or CXL-attached, depending on the topology being tested
-- **Computational storage** (in-/near-storage compute) as the slowest, largest tier
-
-Both topology variants — DDR4 as a local tier vs. DDR4 as the CXL-attached tier with storage a rung below — are being explored as configurations of the same parameterized simulation setup, rather than committing to one upfront.
-
-Alongside the usual IPC, bandwidth, and latency measurements, this project also aims to report a **cost-normalized performance metric** ($/GB-effective or similar), since that's the gap the existing literature leaves most open.
-
-## Repo structure
-
-```bash
-tiered-memory
-└── docs
-    └── literature-review.md    # papers reviewed, grouped by topic
+```
+                 CPU
+                  │
+          Linux VM subsystem
+                  │
+        ┌─────────┴─────────┐
+   NUMA node 0          NUMA node 1
+   Fast DRAM, 8 GB      Slow DRAM, 32 GB
+   DDR4/5               PCIe + DDR3/DDR2
 ```
 
-More will land here as the project moves past the literature-review stage: gem5 configuration scripts (Python), any custom C++ device models, benchmark/workload harnesses, result data, and eventually the LaTeX source for the final report.
+| Config             | Memory                           | Role                           |
+| ------------------ | -------------------------------- | ------------------------------ |
+| **A** Baseline     | 8 GB fast                        | What a commodity PC has        |
+| **B** Proposed     | 8 GB fast + 32 GB slow PCIe DRAM | System under test              |
+| **C** Upper bound  | 40 GB fast                       | Ceiling for B                  |
+| **D** Conventional | 8 GB fast + NVMe/SSD swap        | Is PCIe DRAM better than swap? |
 
-## Tech stack
-
-- **gem5** — architectural simulator, core of the project
-- **Python** — gem5 stdlib config scripts, workload harnesses, data analysis (Matplotlib/Pandas)
-- **C++** — only if/when custom gem5 device models are needed
-- **LaTeX** — final report
-- Formatting/linting: Biome + Prettier for this repo's JS/TS/Markdown tooling; clang-format, black/ruff, and LaTeX tooling (latexindent, chktex) to be added once gem5 and report work start
+**Hypothesis.** H₀: adding the slow tier gives no measurable application-level benefit. H₁: for some workloads, especially those with working sets larger than 8 GB, B beats A. The first goal is narrow: find whether even one meaningful workload/configuration exists where B beats A. If none does, the investigation stops there.
 
 ## Status
 
-Literature review in progress — see [`docs/literature-review.md`](docs/literature-review.md). No simulation results yet.
+| Phase | What                                                     | Status |
+| ----- | -------------------------------------------------------- | ------ |
+| 0     | Workloads, measurement reporting, native RAM-limit sweep | Done   |
+| 1     | gem5 full-system: Linux sees fast node 0 and slow node 1 | Next   |
+| 2     | Validate that node 1 is measurably slower                |        |
+| 3     | Workload experiments: A vs B, then C and D               |        |
+| 4     | PCIe modeling: bandwidth, latency, transaction overhead  |        |
+| 5     | Analysis: whether and when B beats A                     |        |
+
+The gem5 side currently runs in syscall-emulation (SE) mode with a single DRAM channel. SE mode has no OS, so NUMA placement, paging, swap and migration only appear once Phase 1 moves to full-system mode.
+
+## Repo layout
+
+```
+workloads/          C++ benchmarks with gem5 ROI markers (shared harness: common.h)
+configs/run.py      gem5 config: one workload, configurable DRAM
+configs/sweep.py    gem5 sweep over DRAM size -> results/gem5_sweep.csv
+native/sweep_ram.py real machine: cgroup memory limit with swap, finds the slowdown knee
+native/bench.py     real machine: working-set size sweep
+tiered_memory/      measurement code shared by both sweeps
+tests/              pytest suite for tiered_memory/ and the sweeps
+scripts/setup.sh    fetches gem5 at a pinned commit and builds everything
+docs/               measurements.md, literature-review.md
+third_party/gem5    gem5 checkout (not committed, see Setup)
+```
+
+## Workloads
+
+Each workload takes `-s <MiB>` (working set), `-i <iters>` and `-r <seed>`, and prints one `RESULT` line ending in a checksum so any two runs can be confirmed to have done identical work.
+
+| Workload   | Access pattern                                        | `work` unit |
+| ---------- | ----------------------------------------------------- | ----------- |
+| `stream`   | Sequential bandwidth                                  | bytes       |
+| `sort`     | Sorting 16-byte records, mixed access                 | compares    |
+| `gemm`     | Blocked matrix multiply, cache-friendly               | flops       |
+| `chase`    | Dependent pointer chase, pure latency                 | hops        |
+| `kvdecode` | LLM-decode proxy: weight streaming plus KV-cache scan | bytes       |
+
+Graph, database and compilation workloads are still to be added.
+
+## Measurements
+
+Every measurement in the project brief has a CSV column: execution time, throughput, IPC, memory bandwidth and latency, local vs remote accesses, page migration/promotion/demotion, swap, PCIe traffic and CPU utilization. [`docs/measurements.md`](docs/measurements.md) maps each one to its columns, where the number comes from, and its caveats. A blank cell means the counter is unavailable; `0` means it was measured and nothing happened.
+
+## Setup
+
+gem5 is not committed to this repo. `scripts/setup.sh` clones it into `third_party/gem5` at the commit pinned in the script (`GEM5_REF`), builds `gem5.opt` and the `m5` library, then builds the workloads:
+
+```bash
+scripts/setup.sh                # everything (the gem5 build takes a while)
+scripts/setup.sh fetch          # only fetch gem5 at the pinned commit
+scripts/setup.sh m5 wl          # any subset of: fetch gem5 m5 wl
+```
+
+`GEM5_REF` is the reproducibility pin for every result: change it deliberately, and override it for a one-off with `GEM5_REF=<commit> scripts/setup.sh`. `GEM5_REPO`, `GEM5_DIR` and `JOBS` can be overridden the same way.
+
+The workloads build into `workloads/build/m5/` (static, with ROI markers, for gem5) and `workloads/build/native/` (for real-machine runs).
+
+Python tooling (tests, sweeps outside gem5):
+
+```bash
+pip install pytest
+python3 -m pytest
+```
+
+## Running
+
+gem5 sweep (from the repo root):
+
+```bash
+python3 configs/sweep.py                       # all workloads, default DRAM sizes
+python3 configs/sweep.py --workloads chase --mem 16 32
+python3 configs/sweep.py --reparse             # rebuild the CSV from existing m5out/ runs
+```
+
+A single gem5 run:
+
+```bash
+third_party/gem5/build/X86/gem5.opt -d m5out/stream configs/run.py \
+    --binary workloads/build/m5/stream --mem-size 64MiB -- -s 8 -i 2
+```
+
+Native RAM-limit sweep (needs sudo for the cgroup; run on an otherwise idle machine, since the Linux counters are system-wide):
+
+```bash
+sudo python3 native/sweep_ram.py --descend
+```
+
+## Development
+
+- Python: ruff + black (line length 100). C++: clang-format, clang-tidy. Markdown/JSON: Prettier, Biome (`pnpm format`).
+- `pre-commit install` runs the formatters and linters on each commit.
+
+## Known limitations
+
+- gem5 simulates a few million instructions per second, so working sets may need to be scaled down from the 8 GB / 32 GB target, holding ratios constant rather than absolute sizes.
+- Caches are kept small so that megabyte-scale working sets reach DRAM.
+- Results are relative performance on a modeled system, not predictions for any specific product.
